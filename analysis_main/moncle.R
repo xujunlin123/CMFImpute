@@ -1,0 +1,47 @@
+
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("monocle")
+rm(list = ls())
+gc()
+library(monocle)
+
+setwd("/Users/mac/Downloads/")               
+monocle.matrix=read.table("petro_saver.txt",sep="\t",header=T,row.names=1,check.names=F)
+monocle.sample=read.table("sample_petro.txt",sep="\t",header=T,row.names=1,check.names=F)
+monocle.geneAnn=read.table("genes_petro.txt",sep="\t",header=T,row.names=1,check.names=F)
+#marker=read.table("07.monocleMarkers.txt",sep="\t",header=T,check.names=F)
+
+#??Seurat??????????monocle????????????????????????????????????????
+data <- as(as.matrix(monocle.matrix), 'sparseMatrix')
+pd<-new("AnnotatedDataFrame", data = monocle.sample)
+fd<-new("AnnotatedDataFrame", data = monocle.geneAnn)
+cds <- newCellDataSet(data, phenoData = pd, featureData = fd)
+#????????????????????
+cds <- detectGenes(cds, min_expr = 0.1)
+names(pData(cds))[names(pData(cds))=="seurat_clusters"]="Cluster"
+pData(cds)[,"Cluster"]=paste0("cluster",pData(cds)[,"Cluster"])
+
+#????????????????
+clusterRt=read.table("ANN_petro.txt",header=F,sep="\t",check.names=F)
+clusterAnn=as.character(clusterRt[,2])
+names(clusterAnn)=paste0("cluster",clusterRt[,1])
+pData(cds)$cell_type2 <- plyr::revalue(as.character(pData(cds)$Cluster),clusterAnn)
+#expressed_genes <- row.names(subset(fData(cds), num_cells_expressed >= 50))
+#View(expressed_genes)
+cds <- estimateSizeFactors(cds)
+cds <- estimateDispersions(cds)
+disp_table <- dispersionTable(cds)
+ordering_genes <- subset(disp_table, mean_expression >= 0.1)
+cds <- setOrderingFilter(cds, ordering_genes)
+cds <- reduceDimension(cds, max_components = 2,reduction_method ='ICA')
+cds <- orderCells(cds)
+pdf(file="cluster.trajectory3.pdf",width=6.5,height=6)
+plot_cell_trajectory(cds, color_by = "Pseudotime")
+dev.off()
+pdf(file="cellType.trajectory3.pdf",width=6.5,height=6)
+plot_cell_trajectory(cds,color_by = "State")
+dev.off()
+pdf(file="cellHours.pdf",width=6.5,height=6)
+plot_cell_trajectory(cds,color_by = "cell_type2")
+dev.off()
